@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rx-Bio10X Clinical Prescriptor</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Custom Chart Container Rules */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 550px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 260px;
+            max-height: 300px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 280px;
+            }
+        }
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .animate-pulse-subtle {
+            animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.85; }
+        }
+    </style>
+</head>
+<!-- Chosen Palette: Clinical Slate & Bio Emerald (Warm neutral slate canvas, deep navy text, bio-emerald accents, amber warnings) -->
+<!-- Application Structure Plan: The application is structured as a dynamic two-column clinical dashboard. The left panel contains biometric patient input controls (Gender, Age, Weight, Height, Resting HR, Activity Level, Sleep/Stress). The right panel dynamically updates a multi-tab clinical prescription card including: 1) Clinical Summary & Safety Warnings, 2) Physiological Target Visualizations (Chart.js radar and target HR zones), 3) 7-Day Microcycle Routine (Home vs Gym toggle), and 4) Interactive TUT Metronome/Timer to coach tempo (5s/5s). -->
+<!-- Visualization & Content Choices:
+     - Biometrics Input -> Patient State -> Dynamic Calculation JS -> Immediate Re-render.
+     - Physiological Radar Chart -> Chart.js Canvas -> Visualizes Osteogenic Stimulus, Anabolic Demand, Recovery Window, Joint Stress.
+     - Target Heart Rate Zone Bar -> Chart.js Canvas -> Shows Karvonen Target HR for SIT vs Resting HR.
+     - Interactive Checklist & Tempo Metronome -> HTML/CSS/JS -> Allows patients/clinicians to test TUT tempo and check off prescription items.
+     - CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. Dynamic CSS shapes and Canvas used instead.
+-->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen">
+
+    <!-- Header Navigation -->
+    <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-50 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-lg bg-emerald-500 flex items-center justify-center font-bold text-slate-950 text-xl shadow-lg shadow-emerald-500/30">
+                    Rx
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight text-slate-100 flex items-center gap-2">
+                        Prescriptor Clínico Bio-10X & Sims
+                    </h1>
+                    <p class="text-xs text-slate-400">Sistema Biométrico de Ejercicio de Alta Intensidad y Dosis Mínima</p>
+                </div>
+            </div>
+            <div class="hidden md:flex items-center space-x-4">
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-950 text-emerald-300 border border-emerald-800">
+                    ● Motor Fisiológico Activo
+                </span>
+                <button onclick="resetToDefaults()" class="text-xs text-slate-400 hover:text-white transition-colors">
+                    Restablecer Valores
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- App Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <!-- Intro Banner -->
+        <section class="mb-6 bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h2 class="text-base font-bold text-slate-900">Calculadora de Prescripción Personalizada</h2>
+                <p class="text-sm text-slate-600 mt-1">
+                    Ajusta los biométricos de tu paciente para calcular la dosificación exacta de entrenamiento: seguridad articular según IMC, estímulo osteogénico, ventana anabólica y ratio de descanso cardiovascular (SIT).
+                </p>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <span class="text-xs font-semibold px-3 py-1.5 bg-slate-100 rounded-lg border border-slate-200 text-slate-700">
+                    📋 Basado en 10X & Dr. Stacy Sims
+                </span>
+            </div>
+        </section>
+
+        <!-- Main Grid Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <!-- LEFT COLUMN: Patient Biometric Inputs (5 cols) -->
+            <div class="lg:col-span-5 space-y-6">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
+                        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                            <span>👤</span> Biometría del Paciente
+                        </h3>
+                        <span class="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded">Entrada Clínica</span>
+                    </div>
+
+                    <form id="biometricsForm" class="space-y-5" onsubmit="event.preventDefault();">
+                        <!-- Gender Selection -->
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">Género / Perfil Fisiológico</label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <button type="button" id="btnFemale" onclick="setGender('female')" class="py-2.5 px-4 rounded-lg text-sm font-semibold border text-center transition-all flex items-center justify-center gap-2 bg-emerald-50 border-emerald-500 text-emerald-800 shadow-sm">
+                                    <span>♀</span> Femenino
+                                </button>
+                                <button type="button" id="btnMale" onclick="setGender('male')" class="py-2.5 px-4 rounded-lg text-sm font-semibold border border-slate-200 text-slate-600 hover:border-slate-300 text-center transition-all flex items-center justify-center gap-2">
+                                    <span>♂</span> Masculino
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Age Slider & Input -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="text-xs font-bold uppercase tracking-wider text-slate-600">Edad (Años)</label>
+                                <span id="ageVal" class="text-sm font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">42 años</span>
+                            </div>
+                            <input type="range" id="inputAge" min="25" max="75" value="42" oninput="updateBiometrics()" class="w-full accent-emerald-600 bg-slate-200 rounded-lg h-2 cursor-pointer">
+                            <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+                                <span>25</span>
+                                <span>40 (Transición Perimenopausia)</span>
+                                <span>75</span>
+                            </div>
+                        </div>
+
+                        <!-- Weight & Height (Calculates BMI) -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Peso (kg)</label>
+                                <input type="number" id="inputWeight" value="68" min="35" max="180" oninput="updateBiometrics()" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Estatura (cm)</label>
+                                <input type="number" id="inputHeight" value="165" min="120" max="220" oninput="updateBiometrics()" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none">
+                            </div>
+                        </div>
+
+                        <!-- Computed BMI Display Pill -->
+                        <div class="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
+                            <div>
+                                <span class="text-xs text-slate-500 block">IMC Calculado:</span>
+                                <span id="bmiValue" class="text-lg font-extrabold text-slate-900">24.97 kg/m²</span>
+                            </div>
+                            <span id="bmiBadge" class="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                Peso Normal
+                            </span>
+                        </div>
+
+                        <!-- Resting Heart Rate (FCR) -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="text-xs font-bold uppercase tracking-wider text-slate-600">Frecuencia Cardíaca Reposo (FCR)</label>
+                                <span id="fcrVal" class="text-sm font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">70 BPM</span>
+                            </div>
+                            <input type="range" id="inputFCR" min="45" max="95" value="70" oninput="updateBiometrics()" class="w-full accent-slate-700 bg-slate-200 rounded-lg h-2 cursor-pointer">
+                            <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+                                <span>45 (Atleta)</span>
+                                <span>70 (Promedio)</span>
+                                <span>95 (Elevada)</span>
+                            </div>
+                        </div>
+
+                        <!-- Clinical Conditions & Modifiers -->
+                        <div class="pt-2 border-t border-slate-100">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">Factores de Estilo de Vida & Recuperación</label>
+                            
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="text-xs text-slate-600 block mb-1">Estrés / Sueño Diario</label>
+                                    <select id="selectStress" onchange="updateBiometrics()" class="w-full text-xs font-medium px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-700 focus:ring-emerald-500">
+                                        <option value="good">Óptimo (7-9 hrs sueño, bajo estrés)</option>
+                                        <option value="moderate" selected>Moderado (6-7 hrs sueño, estrés laboral)</option>
+                                        <option value="poor">Alto Estrés / Insomnio (Recuperación lenta)</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="text-xs text-slate-600 block mb-1">Entorno de Entrenamiento Preferido</label>
+                                    <select id="selectEnvironment" onchange="updateBiometrics()" class="w-full text-xs font-medium px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-700 focus:ring-emerald-500">
+                                        <option value="home" selected>En Casa (Sin equipo / Mancuernas ligeras)</option>
+                                        <option value="gym">Gimnasio Clínico (Máquinas guiadas / Pesas)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Quick Clinical Prescribing Note -->
+                <div class="bg-amber-50 rounded-xl p-4 border border-amber-200 text-amber-900 text-xs leading-relaxed space-y-1">
+                    <div class="font-bold flex items-center gap-1.5 text-amber-950">
+                        <span>🛡️</span> Regla de Oro Clínica Bio-10X:
+                    </div>
+                    <p>
+                        El IMC determina la <strong>seguridad biomecánica</strong> (limitando o permitiendo pliometría de alto impacto). La edad y el género determinan el <strong>estímulo endocrino</strong> (cargas pesadas o TUT ultra lento) y la nutrición cronometrada.
+                    </p>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: Generated Prescription & Dashboard (7 cols) -->
+            <div class="lg:col-span-7 space-y-6">
+
+                <!-- Dynamic Prescription Header Card -->
+                <div class="bg-slate-900 text-white rounded-xl shadow-lg border border-slate-800 p-6 relative overflow-hidden">
+                    <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4 mb-4">
+                        <div>
+                            <span class="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400 bg-emerald-950 px-2.5 py-1 rounded border border-emerald-800">
+                                Prescripción Personalizada Generada
+                            </span>
+                            <h2 id="rxTitle" class="text-xl font-bold text-white mt-2">
+                                Protocolo Hormonal & Fuerza Stacy Sims
+                            </h2>
+                        </div>
+                        <button onclick="window.print()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 flex items-center gap-1.5 transition-all self-start sm:self-auto">
+                            <span>🖨️</span> Imprimir Rx
+                        </button>
+                    </div>
+
+                    <!-- Clinical Key Findings Grid -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                        <div class="bg-slate-800/80 p-3 rounded-lg border border-slate-700">
+                            <span class="text-[10px] uppercase text-slate-400 font-bold block">Enfoque Clínico</span>
+                            <span id="rxFocus" class="text-xs font-bold text-emerald-400">Densidad Ósea & Fuerza</span>
+                        </div>
+                        <div class="bg-slate-800/80 p-3 rounded-lg border border-slate-700">
+                            <span class="text-[10px] uppercase text-slate-400 font-bold block">Impacto Pliométrico</span>
+                            <span id="rxPlyoRule" class="text-xs font-bold text-emerald-300">Permitido (Alto)</span>
+                        </div>
+                        <div class="bg-slate-800/80 p-3 rounded-lg border border-slate-700">
+                            <span class="text-[10px] uppercase text-slate-400 font-bold block">SIT Ratio Trabajo/Desc.</span>
+                            <span id="rxSITRatio" class="text-xs font-bold text-amber-300">20s / 2 min</span>
+                        </div>
+                        <div class="bg-slate-800/80 p-3 rounded-lg border border-slate-700">
+                            <span class="text-[10px] uppercase text-slate-400 font-bold block">Frecuencia Semanal</span>
+                            <span id="rxFrequency" class="text-xs font-bold text-purple-300">2 Fuerza + 1 SIT</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabs Container -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="flex border-b border-slate-200 bg-slate-50 overflow-x-auto">
+                        <button onclick="switchTab('tabAnalytics')" id="btnTabAnalytics" class="px-4 py-3 text-xs font-bold border-b-2 border-emerald-600 text-emerald-800 bg-white flex items-center gap-1.5 whitespace-nowrap">
+                            <span>📊</span> Perfil Fisiológico
+                        </button>
+                        <button onclick="switchTab('tabRoutine')" id="btnTabRoutine" class="px-4 py-3 text-xs font-bold border-b-2 border-transparent text-slate-600 hover:text-slate-900 flex items-center gap-1.5 whitespace-nowrap">
+                            <span>🗓️</span> Microciclo de 7 Días
+                        </button>
+                        <button onclick="switchTab('tabMetronome')" id="btnTabMetronome" class="px-4 py-3 text-xs font-bold border-b-2 border-transparent text-slate-600 hover:text-slate-900 flex items-center gap-1.5 whitespace-nowrap">
+                            <span>⏱️</span> Marcapasos TUT (10X Tempo)
+                        </button>
+                    </div>
+
+                    <div class="p-6">
+                        <!-- TAB 1: ANALYTICS & PHYSIOLOGY -->
+                        <div id="tabAnalytics" class="space-y-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                                <div>
+                                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Matriz de Adaptación Metabólica</h4>
+                                    <p class="text-xs text-slate-600 mb-4 leading-relaxed">
+                                        Este gráfico muestra el balance de estímulo óptimo configurado para las características actuales del paciente.
+                                    </p>
+                                    
+                                    <div class="space-y-2 text-xs">
+                                        <div class="p-2.5 rounded bg-slate-50 border border-slate-200 flex justify-between items-center">
+                                            <span class="font-medium text-slate-700">FC Máxima Estimada:</span>
+                                            <span id="fcMaxVal" class="font-bold text-slate-900">178 BPM</span>
+                                        </div>
+                                        <div class="p-2.5 rounded bg-slate-50 border border-slate-200 flex justify-between items-center">
+                                            <span class="font-medium text-slate-700">Zona Target Sprint (SIT):</span>
+                                            <span id="fcTargetSIT" class="font-bold text-emerald-700">151 - 169 BPM</span>
+                                        </div>
+                                        <div id="proteinWindowBox" class="p-2.5 rounded bg-amber-50 border border-amber-200 flex justify-between items-center">
+                                            <span class="font-medium text-amber-900">Ventana Anabólica (Proteína):</span>
+                                            <span class="font-bold text-amber-950">40-60g en 45 min</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Chart Container -->
+                                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                    <div class="chart-container">
+                                        <canvas id="radarChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Detailed Guidelines Box -->
+                            <div class="p-4 rounded-xl bg-slate-900 text-slate-200 space-y-3">
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                                    <span>💡</span> Directrices de Ejecución Específicas
+                                </h4>
+                                <ul id="guidelineList" class="text-xs space-y-2 text-slate-300 list-disc list-inside leading-relaxed">
+                                    <!-- Populated by JS -->
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- TAB 2: ROUTINE PLAN -->
+                        <div id="tabRoutine" class="hidden space-y-4">
+                            <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                                <div>
+                                    <h4 class="text-sm font-bold text-slate-900">Plan Semanal Prescrito</h4>
+                                    <p class="text-xs text-slate-500">Formato interactivo de 20 minutos por sesión</p>
+                                </div>
+                                <span id="envBadge" class="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-700 rounded border border-slate-200">
+                                    Entorno: En Casa
+                                </span>
+                            </div>
+
+                            <div id="routineCardsContainer" class="space-y-3">
+                                <!-- Populated dynamically by JS -->
+                            </div>
+                        </div>
+
+                        <!-- TAB 3: TUT METRONOME / TIMING COACH -->
+                        <div id="tabMetronome" class="hidden space-y-6">
+                            <div class="text-center max-w-md mx-auto">
+                                <span class="text-xs font-bold uppercase tracking-widest text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                                    Entrenador de Tiempo Bajo Tensión (TUT)
+                                </span>
+                                <h4 class="text-lg font-bold text-slate-900 mt-2">Marcapasos de Contracción 10X</h4>
+                                <p class="text-xs text-slate-600 mt-1">
+                                    Enseña a tu paciente la cadencia súper lenta (5 segundos concéntrica / 5 segundos excéntrica) para maximizar el reclutamiento de fibras musculares sin pesos excesivos.
+                                </p>
+                            </div>
+
+                            <!-- Metronome Display Box -->
+                            <div class="bg-slate-900 rounded-2xl p-8 text-center text-white border border-slate-800 shadow-xl max-w-sm mx-auto">
+                                <div id="metroPhase" class="text-xs font-extrabold uppercase tracking-widest text-emerald-400 mb-2">
+                                    Listo para Comenzar
+                                </div>
+                                <div id="metroTimer" class="text-6xl font-black font-mono tracking-tight text-white mb-4">
+                                    05
+                                </div>
+                                <div class="w-full bg-slate-800 h-3 rounded-full overflow-hidden mb-6">
+                                    <div id="metroBar" class="bg-emerald-500 h-full w-0 transition-all duration-1000 ease-linear"></div>
+                                </div>
+                                <div class="flex justify-center gap-3">
+                                    <button id="btnStartMetro" onclick="toggleMetronome()" class="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold uppercase rounded-lg shadow-lg shadow-emerald-500/20 transition-all">
+                                        Iniciar Marcapasos
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </main>
+
+    <!-- App Logic & Interactive Functions -->
+    <script>
+        // Data State
+        let state = {
+            gender: 'female',
+            age: 42,
+            weight: 68,
+            height: 165,
+            bmi: 24.97,
+            restingHR: 70,
+            stress: 'moderate',
+            environment: 'home',
+            activeTab: 'tabAnalytics'
+        };
+
+        let radarChartInstance = null;
+        let metroInterval = null;
+        let metroRunning = false;
+        let metroCount = 5;
+        let metroIsConcentric = true;
+
+        // Init App
+        window.addEventListener('DOMContentLoaded', () => {
+            updateBiometrics();
+            initChart();
+        });
+
+        function setGender(g) {
+            state.gender = g;
+            const btnF = document.getElementById('btnFemale');
+            const btnM = document.getElementById('btnMale');
+
+            if (g === 'female') {
+                btnF.className = "py-2.5 px-4 rounded-lg text-sm font-semibold border text-center transition-all flex items-center justify-center gap-2 bg-emerald-50 border-emerald-500 text-emerald-800 shadow-sm";
+                btnM.className = "py-2.5 px-4 rounded-lg text-sm font-semibold border border-slate-200 text-slate-600 hover:border-slate-300 text-center transition-all flex items-center justify-center gap-2";
+            } else {
+                btnM.className = "py-2.5 px-4 rounded-lg text-sm font-semibold border text-center transition-all flex items-center justify-center gap-2 bg-emerald-50 border-emerald-500 text-emerald-800 shadow-sm";
+                btnF.className = "py-2.5 px-4 rounded-lg text-sm font-semibold border border-slate-200 text-slate-600 hover:border-slate-300 text-center transition-all flex items-center justify-center gap-2";
+            }
+            updateBiometrics();
+        }
+
+        function updateBiometrics() {
+            // Fetch inputs
+            state.age = parseInt(document.getElementById('inputAge').value) || 40;
+            state.weight = parseFloat(document.getElementById('inputWeight').value) || 70;
+            state.height = parseFloat(document.getElementById('inputHeight').value) || 165;
+            state.restingHR = parseInt(document.getElementById('inputFCR').value) || 70;
+            state.stress = document.getElementById('selectStress').value;
+            state.environment = document.getElementById('selectEnvironment').value;
+
+            // Calculate BMI
+            const hMeters = state.height / 100;
+            state.bmi = parseFloat((state.weight / (hMeters * hMeters)).toFixed(2));
+
+            // Update UI Labels
+            document.getElementById('ageVal').innerText = `${state.age} años`;
+            document.getElementById('fcrVal').innerText = `${state.restingHR} BPM`;
+            document.getElementById('bmiValue').innerText = `${state.bmi} kg/m²`;
+
+            // BMI Badge Logic
+            const bmiBadge = document.getElementById('bmiBadge');
+            if (state.bmi < 18.5) {
+                bmiBadge.innerText = 'Bajo Peso';
+                bmiBadge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200';
+            } else if (state.bmi <= 24.9) {
+                bmiBadge.innerText = 'Peso Normal';
+                bmiBadge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200';
+            } else if (state.bmi <= 28.0) {
+                bmiBadge.innerText = 'Sobrepeso Leve';
+                bmiBadge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200';
+            } else {
+                bmiBadge.innerText = 'Obesidad / Limitación Impacto';
+                bmiBadge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 border border-rose-200';
+            }
+
+            // Execute Clinical Engine Calculations
+            calculatePrescription();
+        }
+
+        function calculatePrescription() {
+            // Heart Rate Computations (Tanaka Formula & Karvonen)
+            const fcMax = Math.round(208 - (0.7 * state.age));
+            const hrr = fcMax - state.restingHR;
+            const targetSITLow = Math.round(state.restingHR + (hrr * 0.85));
+            const targetSITHigh = Math.round(state.restingHR + (hrr * 0.95));
+
+            document.getElementById('fcMaxVal').innerText = `${fcMax} BPM`;
+            document.getElementById('fcTargetSIT').innerText = `${targetSITLow} - ${targetSITHigh} BPM`;
+
+            // SIT Work/Rest Ratio Logic
+            let sitRatio = '20s / 2 min';
+            if (state.restingHR > 75) {
+                sitRatio = '15s / 3 min';
+            } else if (state.restingHR <= 65) {
+                sitRatio = '25s / 1.5 min';
+            }
+            document.getElementById('rxSITRatio').innerText = sitRatio;
+
+            // Plyometrics Safety Rule
+            let plyoRule = 'Permitido (Alto)';
+            if (state.bmi > 28) {
+                plyoRule = 'SOLO BAJO IMPACTO';
+            } else if (state.bmi > 25) {
+                plyoRule = 'Moderado (Sin desniveles)';
+            }
+            document.getElementById('rxPlyoRule').innerText = plyoRule;
+
+            // Clinical Focus Title & Rules
+            const rxTitle = document.getElementById('rxTitle');
+            const rxFocus = document.getElementById('rxFocus');
+            const proteinBox = document.getElementById('proteinWindowBox');
+
+            if (state.gender === 'female' && state.age >= 40) {
+                rxTitle.innerText = 'Protocolo Estímulo Hormonal & Óseo (Stacy Sims)';
+                rxFocus.innerText = 'Densidad Ósea & Masa Magra';
+                proteinBox.style.display = 'flex';
+            } else if (state.gender === 'female') {
+                rxTitle.innerText = 'Protocolo Potencia & Rendimiento Femenino';
+                rxFocus.innerText = 'Sensibilidad Insulina & Fuerza';
+                proteinBox.style.display = 'flex';
+            } else {
+                rxTitle.innerText = 'Protocolo 10X Hipertrofia & Dosis Mínima';
+                rxFocus.innerText = 'Optimización Hormonal / TUT';
+                proteinBox.style.display = 'none';
+            }
+
+            // Frequency
+            let freq = '2 Fuerza + 1 SIT';
+            if (state.stress === 'poor') {
+                freq = '1-2 Fuerza (Recuperación Lenta)';
+            }
+            document.getElementById('rxFrequency').innerText = freq;
+
+            // Guidelines List Update
+            updateGuidelines(plyoRule, sitRatio);
+
+            // Update Routine Cards
+            updateRoutineView();
+
+            // Update Chart
+            updateChartData();
+        }
+
+        function updateGuidelines(plyoRule, sitRatio) {
+            const list = document.getElementById('guidelineList');
+            list.innerHTML = '';
+
+            const items = [];
+
+            if (state.gender === 'female' && state.age >= 40) {
+                items.push('<strong>Estrategia Stacy Sims:</strong> Entrenar levantando pesado (3-5 repeticiones con RIR 1-2) para sustituir mecánicamente la pérdida de estrógenos.');
+                items.push('<strong>Ventana Anabólica Crítica:</strong> Consumir 40g-60g de proteína de alta calidad durante los 45 minutos post-entrenamiento debido a la resistencia anabólica.');
+            } else {
+                items.push('<strong>Enfoque 10X:</strong> Ejecutar solo 1 serie por ejercicio llevada al fallo muscular verdadero utilizando cadencia ultra lenta (5s subida / 5s bajada).');
+            }
+
+            if (state.bmi > 28) {
+                items.push('<strong>Protección Articular (IMC > 28):</strong> Reemplazar saltos por ejercicios de potencia de bajo impacto (Step-ups rápidos a escalón bajo, med-ball slams o lanzamientos).');
+            } else {
+                items.push('<strong>Estímulo Óseo (Pliometría):</strong> Realizar 3 series de 4 saltos explosivos (Skater jumps o saltos al cajón) al inicio de la sesión para activar osteoblastos.');
+            }
+
+            items.push(`<strong>Sprint SIT (Cardio):</strong> Realizar de 4 a 5 intervalos máximos ("All-Out") de esfuerzo de ${sitRatio.split('/')[0]} seguidos de ${sitRatio.split('/')[1]} de descanso completo.`);
+
+            items.forEach(txt => {
+                const li = document.createElement('li');
+                li.innerHTML = txt;
+                list.appendChild(li);
+            });
+        }
+
+        function updateRoutineView() {
+            const container = document.getElementById('routineCardsContainer');
+            document.getElementById('envBadge').innerText = state.environment === 'home' ? 'Entorno: En Casa (Mancuernas/Corporal)' : 'Entorno: Gimnasio Clínico (Máquinas)';
+
+            const isHome = state.environment === 'home';
+
+            const exA1 = isHome ? 'Sentadilla Búlgara a una pierna (con mancuernas / apoyo en silla)' : 'Prensa de Piernas Guiada (Leg Press)';
+            const exA2 = isHome ? 'Peso Muerto Rumano a una pierna o Puente Glúteo' : 'Peso Muerto Rumano con Barra o Polea';
+            const exB1 = isHome ? 'Flexiones declinadas en mesa/suelo (con pausa isométrica)' : 'Press de Pecho Inclinado en Máquina';
+            const exB2 = isHome ? 'Remo a una mano apoyado en silla (Mancuerna)' : 'Remo Horizontal en Polea/Máquina';
+
+            container.innerHTML = `
+                <!-- Lunes -->
+                <div class="p-4 rounded-lg bg-slate-50 border border-slate-200">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-extrabold uppercase tracking-wide text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">Lunes - Fuerza A + Impacto</span>
+                        <span class="text-[10px] text-slate-500 font-semibold">Duración: 20 min</span>
+                    </div>
+                    <ul class="text-xs space-y-1.5 text-slate-700">
+                        <li>• <strong>Calentamiento & Impacto:</strong> 3 series x 4 saltos explosivos (${state.bmi > 28 ? 'Step-ups rápidos sin salto' : 'Saltos de sentadilla'}).</li>
+                        <li>• <strong>Movimiento 1:</strong> ${exA1} — 3 series x 3-5 reps (Pesado RIR 1-2).</li>
+                        <li>• <strong>Movimiento 2:</strong> ${exA2} — 3 series x 3-5 reps.</li>
+                    </ul>
+                </div>
+
+                <!-- Miércoles -->
+                <div class="p-4 rounded-lg bg-slate-50 border border-slate-200">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-extrabold uppercase tracking-wide text-amber-800 bg-amber-100 px-2 py-0.5 rounded">Miércoles - Sprints SIT (Metabólico)</span>
+                        <span class="text-[10px] text-slate-500 font-semibold">Duración: 15-20 min</span>
+                    </div>
+                    <ul class="text-xs space-y-1.5 text-slate-700">
+                        <li>• <strong>Equipo recomendador:</strong> Bicicleta estática, remo o Mountain Climbers en suelo.</li>
+                        <li>• <strong>Protocolo:</strong> 4 a 5 rondas de esfuerzo máximo ("All-Out") seguidas de descanso completo.</li>
+                        <li>• <strong>FC Objetivo:</strong> Intentar alcanzar ${document.getElementById('fcTargetSIT').innerText}.</li>
+                    </ul>
+                </div>
+
+                <!-- Viernes -->
+                <div class="p-4 rounded-lg bg-slate-50 border border-slate-200">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-extrabold uppercase tracking-wide text-purple-800 bg-purple-100 px-2 py-0.5 rounded">Viernes - Fuerza B (Tren Superior)</span>
+                        <span class="text-[10px] text-slate-500 font-semibold">Duración: 20 min</span>
+                    </div>
+                    <ul class="text-xs space-y-1.5 text-slate-700">
+                        <li>• <strong>Movimiento 1:</strong> ${exB1} — 3 series x 3-5 reps.</li>
+                        <li>• <strong>Movimiento 2:</strong> ${exB2} — 3 series x 3-5 reps.</li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        // Initialize Chart.js Radar
+        function initChart() {
+            const ctx = document.getElementById('radarChart').getContext('2d');
+            
+            radarChartInstance = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['Estímulo Óseo', 'Demand Anabólica', 'Estrés Articular', 'Volumen Cardio', 'Necesidad Descanso'],
+                    datasets: [{
+                        label: 'Perfil Biométrico Paciente',
+                        data: [80, 75, 40, 60, 70],
+                        backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                        borderColor: 'rgba(16, 185, 129, 1)',
+                        borderWidth: 2,
+                        pointBackgroundColor: 'rgba(16, 185, 129, 1)'
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    scales: {
+                        r: {
+                            angleLines: { color: '#e2e8f0' },
+                            grid: { color: '#e2e8f0' },
+                            pointLabels: {
+                                font: { size: 10, weight: 'bold' },
+                                color: '#475569'
+                            },
+                            ticks: { display: false, max: 100 }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+
+            updateChartData();
+        }
+
+        function updateChartData() {
+            if (!radarChartInstance) return;
+
+            // Calculate metrics for radar
+            const boneStimulus = (state.gender === 'female' && state.age >= 40) ? 90 : 60;
+            const anabolicDemand = (state.gender === 'female' && state.age >= 40) ? 95 : 75;
+            const jointStress = (state.bmi > 28) ? 85 : (state.bmi > 25 ? 55 : 30);
+            const cardioVolume = (state.restingHR > 75) ? 40 : 70;
+            const recoveryNeed = (state.stress === 'poor') ? 95 : (state.age > 50 ? 80 : 50);
+
+            radarChartInstance.data.datasets[0].data = [
+                boneStimulus,
+                anabolicDemand,
+                jointStress,
+                cardioVolume,
+                recoveryNeed
+            ];
+            radarChartInstance.update();
+        }
+
+        // Tab Switcher
+        function switchTab(tabId) {
+            state.activeTab = tabId;
+            ['tabAnalytics', 'tabRoutine', 'tabMetronome'].forEach(id => {
+                const el = document.getElementById(id);
+                const btn = document.getElementById('btn' + id.charAt(0).toUpperCase() + id.slice(1));
+                
+                if (id === tabId) {
+                    el.classList.remove('hidden');
+                    btn.className = "px-4 py-3 text-xs font-bold border-b-2 border-emerald-600 text-emerald-800 bg-white flex items-center gap-1.5 whitespace-nowrap";
+                } else {
+                    el.classList.add('hidden');
+                    btn.className = "px-4 py-3 text-xs font-bold border-b-2 border-transparent text-slate-600 hover:text-slate-900 flex items-center gap-1.5 whitespace-nowrap";
+                }
+            });
+        }
+
+        // Metronome / Tempo Trainer Function
+        function toggleMetronome() {
+            const btn = document.getElementById('btnStartMetro');
+            if (metroRunning) {
+                clearInterval(metroInterval);
+                metroRunning = false;
+                btn.innerText = 'Iniciar Marcapasos';
+                btn.className = "px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold uppercase rounded-lg shadow-lg shadow-emerald-500/20 transition-all";
+                document.getElementById('metroPhase').innerText = 'Pausado';
+            } else {
+                metroRunning = true;
+                btn.innerText = 'Detener Marcapasos';
+                btn.className = "px-6 py-2.5 bg-rose-500 hover:bg-rose-400 text-white text-xs font-extrabold uppercase rounded-lg shadow-lg shadow-rose-500/20 transition-all";
+                
+                metroCount = 5;
+                metroIsConcentric = true;
+                runMetronomeTick();
+
+                metroInterval = setInterval(() => {
+                    metroCount--;
+                    if (metroCount <= 0) {
+                        metroIsConcentric = !metroIsConcentric;
+                        metroCount = 5;
+                    }
+                    runMetronomeTick();
+                }, 1000);
+            }
+        }
+
+        function runMetronomeTick() {
+            const phaseEl = document.getElementById('metroPhase');
+            const timerEl = document.getElementById('metroTimer');
+            const barEl = document.getElementById('metroBar');
+
+            phaseEl.innerText = metroIsConcentric ? 'Fase Concéntrica (Subida Lenta)' : 'Fase Excéntrica (Bajada Lenta)';
+            phaseEl.className = metroIsConcentric ? 'text-xs font-extrabold uppercase tracking-widest text-emerald-400 mb-2' : 'text-xs font-extrabold uppercase tracking-widest text-amber-400 mb-2';
+            
+            timerEl.innerText = `0${metroCount}`;
+            const pct = ((5 - metroCount + 1) / 5) * 100;
+            barEl.style.width = `${pct}%`;
+            barEl.className = metroIsConcentric ? 'bg-emerald-500 h-full transition-all duration-1000 ease-linear' : 'bg-amber-500 h-full transition-all duration-1000 ease-linear';
+        }
+
+        function resetToDefaults() {
+            document.getElementById('inputAge').value = 42;
+            document.getElementById('inputWeight').value = 68;
+            document.getElementById('inputHeight').value = 165;
+            document.getElementById('inputFCR').value = 70;
+            document.getElementById('selectStress').value = 'moderate';
+            document.getElementById('selectEnvironment').value = 'home';
+            setGender('female');
+        }
+    </script>
+</body>
+</html>
